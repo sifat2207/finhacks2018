@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1536206596784.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3777585944",
+    "id" : "55BC4943",
+    "lastKnownWriteTime" : 1536216880,
+    "last_content_update" : 1536216880506,
+    "path" : "E:/sifat/finhacks2018/npl-20180815/npl.R",
+    "project_path" : "npl.R",
+    "properties" : {
+        "cursorPosition" : "14,17",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

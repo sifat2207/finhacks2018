@@ -1,0 +1,39 @@
+
+#library
+library(dplyr)
+library(smbinning)
+
+
+# data
+data_train=read.csv("npl_train.csv")%>%
+        select(-X)
+data_test=read.csv("npl_test.csv")%>%
+        select(-X)
+
+
+#data preparation
+#cek missing data
+summary(data_train)
+summary(data_test)
+
+
+#model
+vardep="flag_kredit_macet"
+model=glm(flag_kredit_macet~., data=data_train, family = binomial(link="logit"))
+
+#validitas
+
+data_train$pred <- predict(model, type="response", newdata=data_train)
+
+# Calculate the area under the ROC curve
+library(pROC)
+roc.curve <- roc(data_train$flag_kredit_macet, data_train$pred, ci=T)
+
+# Plot the ROC curve
+plot(roc.curve)
+
+# Calculates a cross-tabulation of observed and predicted classes 
+# with associated statistics 
+library(caret)
+threshold <- 0.5
+confusionMatrix(factor(data_train$pred>threshold), factor(data_train$flag_kredit_macet==1), positive="TRUE")
