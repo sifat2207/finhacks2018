@@ -156,3 +156,4 @@ data_psi=data_train%>%
                       mutate(type="2"))
 smbinning.psi(data_psi, y="type",x="klas")        #PSI=0.07432464
 smbinning.psi(data_psi, y="type",x="klas_smote")  #PSi=0.03056048
+
