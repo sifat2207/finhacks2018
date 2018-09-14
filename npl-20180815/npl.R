@@ -4,7 +4,7 @@ library(pROC)
 library(caret)
 library(xgboost)
 library(smbinning)
-
+library(e1071)
 
 # data------
 data_train=read.csv("npl_train.csv")%>%
@@ -120,8 +120,8 @@ con_train_smote=confusionMatrix(factor(data_train$pred_smote>threshold), factor(
 #importance variable
 all_=xgb.importance(colnames(dtrain),model=model_xgboost)
 smote=xgb.importance(colnames(dtrain),model=model_xgboost_smote)
-xgb.plot.importance(all_)
-xgb.plot.importance(smote)
+#xgb.plot.importance(all_)
+#xgb.plot.importance(smote)
 
 #prediksi data test------
 # convert categorical factor into one-hot encoding
