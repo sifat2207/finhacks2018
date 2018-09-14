@@ -1,0 +1,91 @@
+---
+title: "Predicting Credit Card Default using XGBoost"
+author: "Alexander Indrajaya L, Novan Dwi Atmaja, Siti Fatimah"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+### Executive Summary
+
+Salah satu fungsi dari perbankan adalah menyalurkan dana yang telah terkumpul untuk disalurkan kepada masyarakat salah satunya dalam bentuk pemberian pinjaman.  Bank dituntut untuk mampu mengelola pinjaman nasabah dengan cermat. Sehingga proses menentukan nasabah yang dinilai layak untuk mendapatkan pinjaman atau tidak menjadi hal yang penting. Dalam mengukur resiko credit pada umumnya perbankan menggunkan metode credit scoring.
+In order to evaluate the accuracy of this method, various prediction techniques have been formulated and introduced. Several measurement methods such as expert systems, econometric models, artificial intelligence (AI) techniques and hybrid form have different techniques.
+Pada analisa ini, kami akan melakukan pemodelan credit card default berdasarkan data yang sudah di provide oleh  FinHack 2018. Akan akan menggunakan model XGboost sebagai model dasar. Kami juga akan menyelesaikan masalah unbalanced data dengan menggunakan algoritma SMOTE.  Selanjutnya kami akan mengukur performa dan stabilitas model.
+
+
+### The Dataset
+
+Data yang kami gunakan terdiri dari 15.493 data training dan 2.214 data test. Data tersebut berisi terkait history pemakaian kartu kredit beserta status apakah kredit tersebut lancer atau tidak (namun pada data test data status kredit tersebut tidak tersedia). Detail terkait data yang digunakan dapat dilihat pada dashboard finhacks.
+
+### Exploratory Data Analysis
+
+Data training terdiri dari 1.359 (8.77%) credit macet dan 14.134 (91.23%) credit lancar.
+
+Berikut ini adalah summary dari data yang akan digunakan
+
+Dari summary di atas diperoleh bahwa tidak ada data yang missing sehingga pada analisa ini tidak dilakukan proses data cleansing.
+
+### Key Finding 
+
+Pertama kami akan mengukur predictive power of characteristic dengan menggunakan information value. Berdasarkan Naeem siqqidi , one rule of thumb regarding IV is:
+
+
+Information Value | Predictive Power
+---|---
+Less than 0.02 | Unpredictive
+0.02 to 0.1 | Weak
+0.1 to 0.3 | Medium 
+Greater than 0.3 | Strong
+
+Kami mengukur IV menggunakan library(smbinning). Algoritma ini akan mengkategorikan data numerik kedalam bins tertentu berdasarkan Conditional Inferences Tree.
+
+Berdasarakan nilai IV, diperoleh bahwa terdapat 8 feature: rasio_pembayaran, total_pemakaian_per_limit, total_pemakaian_retail, total_pemakaian, outstanding, tagihan, sisa tagihan per_limit, dan utilisasi_6bulan merupakan predictor yang kuat untuk mengukur kredit macet. 
+Dari table di atas diperoleh bahwa hanya terdapat 4 features yang signifikan tidak mempengaruhi status kredit nasabah. Namun dengan mempertimbangkan jumlah feature yang tidak terlalu banyak dan jumlah yang signifikan hanya sedikit, maka pada proses pemodelan akan menggunakan semua features.
+
+### Predicting 
+
+Data yang tersedia menunjukan adanya kasus imbalanced data, 
+
+However, most of the existing state-of-the-art classification approaches are well developed by assuming the underlying training set is evenly distributed.  Thus, they are faced with a severe bias problem when the training set is a highly imbalanced distribution (i.e., the data comprises two classes, the minority class C and the majority class C). The resulting decision boundary is severely biased to the minority class, and thus leads to a poor performance according to the receiver operator characteristic (ROC) curve analysis. The synthetic minority oversampling technique (SMOTE) is an important approach by oversampling the positive class or the minority class.
+
+Pada tahap ini, kami akan memprediksi credit macet dengan menggunakan XGBoost. Kami akan membandingkan pengaruh smote pada data training terhadap performa model. Berikut ini adalah tahapan yang kami lakukan:
+
+1. Create new data training using SMOTE algorithm 
+2. Convert categorical factor into one-hot encoding
+3. Construct XGBoost object dengan xgb.DMatrix
+4. Tentukan parameter (kami memilih iterasi sebanyak 100 kali)
+5. Construct XGBoost model
+6. Using model to predict credit default
+7. Model evaluation
+
+Berikut ini adalah data hasil SMOTE
+
+Berikut important variable yang diperoleh dari model 
+
+Berikut importance variable dengan menggunakan smote
+
+Diperoleh bahwa rasio_pembayaran (Rasio perbandingan jumlah yang dibayar dengan tagihan pada bulan terakhir) merupakan features yang plg penting, hal ini konsisten dengan IV features ini yg paling besar.
+Berikut ini perbandingan yg diperoleh
+
+Proses smote sedikit mengurangi tingkat akurasi, namun dapat meningkatkan recall. Dengan mempertimbangkan nilai akurasi yang masih tetap besar. Maka model dengan smote akan dipilih sebagai model prediksi.
+
+Kami juga mengukur stabilitas distribusi model terhadap data testing. Berikut ini adalah langkah-langkahnya
+
+1. Hitung PD data training berdasarkan model xgboost dan smote-xgboost
+2. Untuk setiap model, group data PD ke dalam 5% percentile. Simpan batas masing-masing klas.
+3. Hitung PD data test berdasarkan model xgboost dan smote-xgboost 
+4. Klasifikasikan nilai PD berdasarkan batas yang diperoleh pada langkah 2
+5. Hitung nilai PSI (population stability index)
+
+Berikut ini hasil perbandingan PSI
+
+Dari table di atas diperoleh bahwa model smote-xgboost lebih stabil.
+
+Referensi 
+
+https://pdfs.semanticscholar.org/afb7/08f63a504513eb3cedcf76a1ae935da6509e.pdf
+http://sci2s.ugr.es/keel/pdf/specific/congreso/04129201.pdf
+
