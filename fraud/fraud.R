@@ -30,6 +30,7 @@ var_nominal=c("tipe_kartu","id_merchant", "tipe_mesin","tipe_transaksi",
               "kuartal_transaksi","kepemilikan_kartu","id_channel")
 var_numerik=c("nilai_transaksi","rata_rata_nilai_transaksi","maksimum_nilai_transaksi",
               "minimum_nilai_transaksi","rata_rata_jumlah_transaksi")
+
 data_train=data_train%>%
   select_(.dots=c(vardep,var_nominal,var_numerik))%>%
   mutate_at(vars(one_of(var_nominal)),funs(as.character))%>%
@@ -42,16 +43,21 @@ for (nama in var_nominal){
   levels(data_test[,nama])=levels(data_train[,nama])
 }
 
-
+# Partition data
+set.seed(1234)
+ind <- sample(2, nrow(data_train), replace = T, prob = c(0.8, 0.2))
+# train <- data[ind==1,]
+# test <- data[ind==2,]
 
 
 #information value
-iv_table=smbinning::smbinning.sumiv(data_train, y=vardep)
+iv_table=smbinning::smbinning.sumiv(data_train[ind==1,], y=vardep)
 
 
 formu=as.formula(paste(vardep,"~."))
 
 #model xgboost-----
+#threshold to calculate accuracy and recall 
 threshold <- 0.5
 
 # convert categorical factor into one-hot encoding
@@ -63,25 +69,44 @@ for (nama in var_nominal){
   data_numerik=cbind(data_numerik,temp)
 }
 
-data_matrix <- data.matrix(data_numerik)
+data_matrix_train <- data.matrix(data_numerik[ind==1,])
+data_matrix_test <- data.matrix(data_numerik[ind==2,])
 
-train_label=data.matrix(data_train%>%select_(.dots=c(vardep)))
-dtrain <- xgb.DMatrix(data = data_matrix, label=train_label )
-model_xgboost <- xgboost(data = dtrain, # the data   
-                         nround = 10, # max number of boosting iterations
-                         objective = "binary:logistic")  # the objective function
-rm(temp,data_matrix)
+label_train=data.matrix(data_train[ind==1,]%>%select_(.dots=c(vardep)))
+label_test=data.matrix(data_train[ind==2,]%>%select_(.dots=c(vardep)))
+
+dtrain <- xgb.DMatrix(data = data_matrix_train, label=label_train)
+dtest <- xgb.DMatrix(data = data_matrix_test, label=label_test)
+
+watchlist <- list(train = dtrain, test = dtest)
+
+xgb_params <- list(max_depth = 6, eta = 0.7, silent = 1, nthread = 2, 
+                   objective = "binary:logistic", eval_metric = "auc")
+
+# eXtreme Gradient Boosting Model
+model_xgboost <- xgb.train(params = xgb_params,
+                       data = dtrain,
+                       nrounds = 6, 
+                       watchlist)
+e <- data.frame(model_xgboost$evaluation_log)
+plot(e$iter, e$train_auc, col = 'blue')
+lines(e$iter, e$test_auc, col = 'red')
+
+rm(data_matrix_train,data_matrix_test,label_train,label_test, data_numerik, temp)
 
 #validitas
-data_train$pred <- predict(model_xgboost, dtrain)
+data_train$pred =0
+data_train[ind==1,"pred"] <- predict(model_xgboost, dtrain)
+data_train[ind==2,"pred"] <- predict(model_xgboost, dtest)
 
 # Calculate the area under the ROC curve
-roc.curve <- roc(data_train[,vardep], data_train$pred, ci=T)
-
+roc.curve_train <- roc(data_train[ind==1,vardep], data_train[ind==1,"pred"], ci=T)
+roc.curve_test <- roc(data_train[ind==2,vardep], data_train[ind==2,"pred"], ci=T)
 
 # Calculates a cross-tabulation of observed and predicted classes 
 # with associated statistics 
-con=confusionMatrix(factor(data_train$pred>threshold), factor(data_train[,vardep]==1), positive="TRUE")
+con_train=confusionMatrix(factor(data_train[ind==1,"pred"]>threshold), factor(data_train[ind==1,vardep]==1), positive="TRUE")
+con_test=confusionMatrix(factor(data_train[ind==2,"pred"]>threshold), factor(data_train[ind==2,vardep]==1), positive="TRUE")
 
 
 
@@ -90,7 +115,7 @@ con=confusionMatrix(factor(data_train$pred>threshold), factor(data_train[,vardep
 source('smote function.R')
 
 set.seed(1234)
-data_smote=data_train %>% select(-pred)
+data_smote=data_train[ind==1,] %>% select(-pred)
 data_smote[,vardep]=as.character(data_smote[,vardep])
 data_smote[,vardep]=as.factor(data_smote[,vardep])
 data_smote <- SMOTE(formu, 
@@ -110,31 +135,38 @@ for (nama in var_nominal){
 data_matrix_smote <- data.matrix(data_numerik_smote)
 train_label_smote=data.matrix(data_smote%>%select_(.dots=c(vardep)))
 dtrain_smote <- xgb.DMatrix(data = data_matrix_smote, label=train_label_smote )
-model_xgboost_smote <- xgboost(data = dtrain_smote, # the data   
-                               nround = 10, # max number of boosting iterations
-                               objective = "binary:logistic")  # the objective function
+
+watchlist_smote <- list(train = dtrain_smote, test = dtest)
+
+xgb_params_smote <- list(max_depth = 6, eta = 0.7, silent = 1, nthread = 2, 
+                   objective = "binary:logistic", eval_metric = "auc")
+
+# eXtreme Gradient Boosting Model
+model_xgboost_smote <- xgb.train(params = xgb_params_smote,
+                           data = dtrain_smote,
+                           nrounds = 10, 
+                           watchlist=watchlist_smote)
+
 rm(temp,data_matrix_smote)
 
 #validitas
 data_smote$pred <- predict(model_xgboost_smote, dtrain_smote)
 
+data_train$pred_smote =0
+data_train[ind==1,"pred_smote"] <- predict(model_xgboost_smote, dtrain)
+data_train[ind==2,"pred_smote"] <- predict(model_xgboost_smote, dtest)
+
 # Calculate the area under the ROC curve
 roc.curve_smote <- roc(data_smote[,vardep], data_smote$pred, ci=T)
+roc.curve_smote_train <- roc(data_train[ind==1,vardep], data_train[ind==1,"pred_smote"], ci=T)
+roc.curve_smote_test <- roc(data_train[ind==2,vardep], data_train[ind==2,"pred_smote"], ci=T)
 
 
 # Calculates a cross-tabulation of observed and predicted classes 
 # with associated statistics 
 con_smote=confusionMatrix(factor(data_smote$pred>threshold), factor(data_smote[,vardep]==1), positive="TRUE")
-
-#####
-#
-data_train$pred_smote <- predict(model_xgboost_smote, dtrain)
-roc.curve_train_smote <- roc(data_train[,vardep], data_train$pred_smote, ci=T)
-
-
-# Calculates a cross-tabulation of observed and predicted classes 
-# with associated statistics 
-con_train_smote=confusionMatrix(factor(data_train$pred_smote>threshold), factor(data_train[,vardep]==1), positive="TRUE")
+con_smote_train=confusionMatrix(factor(data_train[ind==1,"pred_smote"]>threshold), factor(data_train[ind==1,vardep]==1), positive="TRUE")
+con_smote_test=confusionMatrix(factor(data_train[ind==2,"pred_smote"]>threshold), factor(data_train[ind==2,vardep]==1), positive="TRUE")
 
 
 #importance variable
@@ -154,28 +186,27 @@ for (nama in var_nominal){
 
 data_matrix_test <- data.matrix(data_numerik_test)
 
-#train_label=data.matrix(data_train%>%select_(.dots=c(vardep)))
-dtest <- xgb.DMatrix(data = data_matrix_test )
-data_test$pred <- predict(model_xgboost, dtest)
-data_test$pred_smote <- predict(model_xgboost_smote, dtest)
+dvalidasi <- xgb.DMatrix(data = data_matrix_test )
+data_test$pred <- predict(model_xgboost, dvalidasi)
+data_test$pred_smote <- predict(model_xgboost_smote, dvalidasi)
 
 #perbandingan akurasi
-table_akurasi=data.frame(data=c("train", "smote", "train"),
-                         model=c("xgboost","smote-xgboost","smote-xgboost"),
-                         auc=c(as.numeric(roc.curve$auc), as.numeric(roc.curve_smote$auc),as.numeric(roc.curve_train_smote$auc)),
-                         accuracy=c(con$overall[1],con_smote$overall[1],con_train_smote$overall[1]),
-                         recall=c(con$byClass[6],con_smote$byClass[6],con_train_smote$byClass[6]))
-
+table_akurasi=data.frame(model=c("xgboost","xgboost","smote-xgboost","smote-xgboost","smote-xgboost"),
+                         data=c("train (model)","test","smote_train (model)","train","test"),
+                         auc=c(as.numeric(roc.curve_train$auc),as.numeric(roc.curve_test$auc),as.numeric(roc.curve_smote$auc),
+                               as.numeric(roc.curve_smote_train$auc),as.numeric(roc.curve_smote_test$auc)),
+                         accuracy=c(con_train$overall[1],con_test$overall[1],con_smote$overall[1],con_smote_train$overall[1],con_smote_test$overall[1]),
+                         recall=c(con_train$byClass[6],con_test$byClass[6],con_smote$byClass[6],con_smote_train$byClass[6],con_smote_test$byClass[6]))
 
 #stabilitas hasil prediksi-----
 #all data training
-batas_percentile=round(quantile(data_train$pred, probs = seq(0.05,0.95,0.5)),8)
+batas_percentile=round(quantile(data_train[ind==1,"pred"], probs = seq(0.05,0.95,0.5)),8)
 data_train$klas=cut(data_train$pred,breaks =unique( c(0,batas_percentile,1)))
 
 #data_train%>%group_by(klas)%>% summarise(min=min(pred), max=max(pred),bad=sum(flag_kredit_macet),n= n())
 
 #smote data training
-batas_percentile_smote=round(quantile(data_train$pred_smote, probs = seq(0.05,0.95,0.05)),8)
+batas_percentile_smote=round(quantile(data_train[ind==1,"pred_smote"], probs = seq(0.05,0.95,0.05)),8)
 data_train$klas_smote=cut(data_train$pred_smote,breaks = unique(c(0,batas_percentile_smote,1)))
 
 #PSI----
@@ -183,14 +214,24 @@ library(smbinning)
 data_test$klas=cut(data_test$pred,breaks = c(0,batas_percentile,1))
 data_test$klas_smote=cut(data_test$pred_smote,breaks = unique(c(0,batas_percentile_smote,1)))
 
-data_psi=data_train%>%
+data_psi=data_train[ind==1,]%>%
   select(klas, klas_smote)%>%
   mutate(type="1")%>%
+  rbind(data_train[ind==2,]%>%
+          select(klas, klas_smote)%>%
+          mutate(type="2"))%>%
   rbind(data_test%>%
           select(klas, klas_smote)%>%
-          mutate(type="2"))
+          mutate(type="3"))
 psi_all=smbinning.psi(data_psi, y="type",x="klas")        
 psi_smote=smbinning.psi(data_psi, y="type",x="klas_smote")  
 
 psi_table=data.frame(model=c("xgboost","smote-xgboost"),
-                     PSI=c(psi_all$psimg[nrow(psi_all$psimg),2],psi_smote$psimg[nrow(psi_smote$psimg),2]))
+                     PSI_train_test=c(psi_all$psimg[nrow(psi_all$psimg),2],psi_smote$psimg[nrow(psi_smote$psimg),2]),
+                     PSI_test=c(psi_all$psimg[nrow(psi_all$psimg),3],psi_smote$psimg[nrow(psi_smote$psimg),3]),
+                     num_klas=c(psi_all$psicnt%>%nrow()-1,psi_smote$psicnt%>%nrow()-1))%>%
+  mutate(Inference_train=ifelse(PSI_train_test<0.1,"Insignificant change",
+                          ifelse(PSI_train_test<0.25, "Some minor change","Major shift in population")))%>%
+  mutate(Inference_test=ifelse(PSI_test<0.1,"Insignificant change",
+                                ifelse(PSI_test<0.25, "Some minor change","Major shift in population")))
+
