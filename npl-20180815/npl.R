@@ -32,10 +32,6 @@ levels(data_test$kode_cabang)=levels(data_train$kode_cabang)
 levels(data_test$skor_delikuensi)=levels(data_train$skor_delikuensi)
 
 
-#information value
-iv_table=smbinning::smbinning.sumiv(data_train, y="flag_kredit_macet")
-
-
 formu=as.formula(paste(vardep,"~."))
 
 #model xgboost-----
@@ -61,6 +57,8 @@ data_train$pred <- predict(model_xgboost, dtrain)
 # Calculate the area under the ROC curve
 roc.curve <- roc(data_train$flag_kredit_macet, data_train$pred, ci=T)
 
+# Calculate the area under the ROC curve
+roc.curve <- roc(data_train$flag_kredit_macet, data_train$pred, ci=T)
 
 # Calculates a cross-tabulation of observed and predicted classes 
 # with associated statistics 
@@ -92,8 +90,8 @@ data_matrix_smote <- data.matrix(data_numerik_smote)
 train_label_smote=data.matrix(data_smote%>%select_(.dots=c(vardep)))
 dtrain_smote <- xgb.DMatrix(data = data_matrix_smote, label=train_label_smote )
 model_xgboost_smote <- xgboost(data = dtrain_smote, # the data   
-                               nround = 100, # max number of boosting iterations
-                               objective = "binary:logistic")  # the objective function
+                         nround = 100, # max number of boosting iterations
+                         objective = "binary:logistic")  # the objective function
 
 #validitas
 data_smote$pred <- predict(model_xgboost_smote, dtrain_smote)
@@ -120,8 +118,6 @@ con_train_smote=confusionMatrix(factor(data_train$pred_smote>threshold), factor(
 #importance variable
 all_=xgb.importance(colnames(dtrain),model=model_xgboost)
 smote=xgb.importance(colnames(dtrain),model=model_xgboost_smote)
-xgb.plot.importance(all_)
-xgb.plot.importance(smote)
 
 #prediksi data test------
 # convert categorical factor into one-hot encoding
@@ -136,14 +132,6 @@ data_matrix_test <- data.matrix(data_numerik_test)
 dtest <- xgb.DMatrix(data = data_matrix_test )
 data_test$pred <- predict(model_xgboost, dtest)
 data_test$pred_smote <- predict(model_xgboost_smote, dtest)
-
-#perbandingan akurasi
-table_akurasi=data.frame(data=c("train", "smote", "train"),
-                         model=c("xgboost","smote-xgboost","smote-xgboost"),
-                         auc=c(as.numeric(roc.curve$auc), as.numeric(roc.curve_smote$auc),as.numeric(roc.curve_train_smote$auc)),
-                         accuracy=c(con$overall[1],con_smote$overall[1],con_train_smote$overall[1]),
-                         recall=c(con$byClass[6],con_smote$byClass[6],con_train_smote$byClass[6]))
-
 
 #stabilitas hasil prediksi-----
 #all data training
@@ -167,8 +155,6 @@ data_psi=data_train%>%
         rbind(data_test%>%
                       select(klas, klas_smote)%>%
                       mutate(type="2"))
-psi_all=smbinning.psi(data_psi, y="type",x="klas")        #PSI=0.07432464
-psi_smote=smbinning.psi(data_psi, y="type",x="klas_smote")  #PSi=0.03056048
+smbinning.psi(data_psi, y="type",x="klas")        #PSI=0.07432464
+smbinning.psi(data_psi, y="type",x="klas_smote")  #PSi=0.03056048
 
-psi_table=data.frame(model=c("xgboost","smote-xgboost"),
-                     PSI=c(psi_all$psimg[21,2],psi_smote$psimg[21,2]))
