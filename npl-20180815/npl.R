@@ -4,7 +4,7 @@ library(pROC)
 library(caret)
 library(xgboost)
 library(smbinning)
-
+library(e1071)
 
 # data------
 data_train=read.csv("npl_train.csv")%>%
